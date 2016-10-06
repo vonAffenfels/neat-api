@@ -7,12 +7,14 @@ var redis = require("redis");
 var Promise = require("bluebird");
 var crypto = require('crypto');
 var fs = require('fs');
+var pathToRegexp = require('path-to-regexp');
 var mongoose = require("mongoose");
 
 module.exports = class Api extends Module {
 
     static defaultConfig() {
         return {
+            loginPath: "/login",
             elementsModuleName: "elements",
             webserverModuleName: "webserver",
             authModuleName: "auth"
@@ -197,7 +199,23 @@ module.exports = class Api extends Module {
     getPageFromRequest(req) {
         for (var key in this.pages) {
             var page = this.pages[key];
-            if (new RegExp(page.path).test(req.path)) {
+
+            if (page.regexp) {
+                if (new RegExp("^" + page.path + "$").test(req.path)) {
+                    return page;
+                }
+            }
+
+            var keys = [];
+            var re = pathToRegexp(page.path, keys);
+            var result = re.exec(req.path);
+
+            if (result) {
+                for (var i = 0; i < keys.length; i++) {
+                    var key = keys[i];
+                    req.params[key.name] = result[i + 1];
+                }
+
                 return page;
             }
         }
@@ -213,6 +231,15 @@ module.exports = class Api extends Module {
                 return resolve({
                     status: 404
                 });
+            }
+
+            if (page && page.requires && page.requires.auth) {
+                if (!req.user) {
+                    return resolve({
+                        status: 302,
+                        redirect: this.config.loginPath
+                    });
+                }
             }
 
             var status = page.status || 200;
@@ -266,7 +293,11 @@ module.exports = class Api extends Module {
         }
 
         schema.options.toJSON.transform = function (doc) {
-            var obj = schema.options.toJSON._transform(doc);
+            if (schema.options.toJSON._transform) {
+                var obj = schema.options.toJSON._transform(doc);
+            } else {
+                obj = doc.toObject();
+            }
 
             delete obj._versions;
             return obj;
