@@ -51,6 +51,7 @@ module.exports = class Api extends Module {
         var sort = req.body.sort || {};
         var query = req.body.query || {};
         var select = req.body.select || {};
+        var populate = req.body.populate || [];
 
         switch (req.params.action) {
             case "find":
@@ -60,7 +61,7 @@ module.exports = class Api extends Module {
                     }
                 }
 
-                model.find(query).limit(limit).skip(limit * page).select(select).sort(sort).then((docs) => {
+                model.find(query).limit(limit).skip(limit * page).populate(populate).select(select).sort(sort).then((docs) => {
                     res.json(docs);
                 }, (err) => {
                     res.err(err);
@@ -73,8 +74,26 @@ module.exports = class Api extends Module {
                     }
                 }
 
-                model.findOne(query).select(select).sort(sort).then((doc) => {
+                model.findOne(query).select(select).sort(sort).populate(populate).then((doc) => {
                     res.json(doc);
+                }, (err) => {
+                    res.err(err);
+                });
+                break;
+            case "versions":
+                if (Application.modules[this.config.authModuleName]) {
+                    if (!Application.modules[this.config.authModuleName].hasPermission(req, req.params.model, req.params.action)) {
+                        return res.status(401).end();
+                    }
+                }
+
+                model.findOne(query).select(select).sort(sort).then((doc) => {
+                    return Promise.map(doc.get("_versions"), (obj) => {
+                        var doc = new model(obj);
+                        return doc.populate(populate).execPopulate();
+                    }).then((docs) => {
+                        return res.json(docs);
+                    });
                 }, (err) => {
                     res.err(err);
                 });
@@ -95,21 +114,24 @@ module.exports = class Api extends Module {
             case "save":
                 var getPromise = Promise.resolve();
 
-                if (req.body._id) {
+                delete req.body.data.__v;
+                req.body.data._version = null; // save means new version, so in case any version was submitted, just ignore it
+
+                if (req.body.data._id) {
                     getPromise = model.findOne({
-                        _id: req.body._id
+                        _id: req.body.data._id
                     });
                 }
 
                 getPromise.then((doc) => {
                     if (!doc) {
-                        doc = new model(req.body);
-                        doc.set("_createdBy", req.user || null);
+                        doc = new model(req.body.data);
+                        doc.set("_createdBy", req.user ? req.user._id : null);
                     } else {
-                        for (var key in req.body) {
-                            doc.set(key, req.body[key]);
+                        for (var key in req.body.data) {
+                            doc.set(key, req.body.data[key]);
                         }
-                        doc.set("_updatedBy", req.user || null);
+                        doc.set("_updatedBy", req.user ? req.user._id : null);
                     }
 
                     if (Application.modules[this.config.authModuleName]) {
@@ -121,9 +143,7 @@ module.exports = class Api extends Module {
                     doc.save().then(() => {
                         return model.findOne({
                             _id: doc._id
-                        })
-                    }, (err) => {
-                        res.err(err);
+                        }).populate(populate)
                     }).then((doc) => {
                         res.json(doc);
                     }, (err) => {
@@ -138,12 +158,24 @@ module.exports = class Api extends Module {
                     }
                 }
 
-                model.remove(query).then((count) => {
-                    res.end(count);
+                model.remove(query).then(() => {
+                    res.end();
                 }, (err) => {
                     res.err(err);
                 });
                 break;
+            case "pagination":
+                if (Application.modules[this.config.authModuleName]) {
+                    if (!Application.modules[this.config.authModuleName].hasPermission(req, req.params.model, "count", null, query)) {
+                        return res.status(401).end();
+                    }
+                }
+
+                model.count(req.body.query || {}).then((count) => {
+                    res.json(Tools.getPaginationForCount(count, req.body.limit || 15, req.body.page, req.body.pagesInView, req));
+                });
+                break;
+
         }
 
     }
@@ -199,6 +231,7 @@ module.exports = class Api extends Module {
     getPageFromRequest(req) {
         for (var key in this.pages) {
             var page = this.pages[key];
+            page.id = key;
 
             if (page.regexp) {
                 if (new RegExp("^" + page.path + "$").test(req.path)) {
@@ -215,6 +248,8 @@ module.exports = class Api extends Module {
                     var key = keys[i];
                     req.params[key.name] = result[i + 1];
                 }
+
+                req.activePage = page;
 
                 return page;
             }
@@ -256,61 +291,4 @@ module.exports = class Api extends Module {
         });
     }
 
-    modifySchema(modelName, schema) {
-        schema.add({
-            _createdAt: {
-                type: Date,
-                default: function () {
-                    return new Date();
-                }
-            },
-            _createdBy: {
-                type: mongoose.Schema.Types.ObjectId,
-                ref: "user",
-                default: null
-            },
-
-            _updatedAt: {
-                type: Date,
-                default: function () {
-                    return new Date();
-                }
-            },
-            _updatedBy: {
-                type: mongoose.Schema.Types.ObjectId,
-                ref: "user",
-                default: null
-            },
-
-            _versions: {
-                type: Array,
-                default: []
-            }
-        });
-
-        if (schema.options.toJSON.transform && typeof schema.options.toJSON.transform === "function") {
-            schema.options.toJSON._transform = schema.options.toJSON.transform;
-        }
-
-        schema.options.toJSON.transform = function (doc) {
-            if (schema.options.toJSON._transform) {
-                var obj = schema.options.toJSON._transform(doc);
-            } else {
-                obj = doc.toObject();
-            }
-
-            delete obj._versions;
-            return obj;
-        }
-
-        schema.pre("save", function (next) {
-            this._updatedAt = new Date();
-
-            var newVersion = this.toJSON();
-            delete newVersion._versions;
-            newVersion._version = this._versions.length;
-            this._versions.push(newVersion);
-            return next();
-        });
-    }
 }
