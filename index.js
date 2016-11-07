@@ -8,7 +8,6 @@ var Promise = require("bluebird");
 var crypto = require('crypto');
 var fs = require('fs');
 var pathToRegexp = require('path-to-regexp');
-var mongoose = require("mongoose");
 
 module.exports = class Api extends Module {
 
@@ -17,6 +16,7 @@ module.exports = class Api extends Module {
             loginPath: "/login",
             elementsModuleName: "elements",
             webserverModuleName: "webserver",
+            dbModuleName: "database",
             authModuleName: "auth"
         }
     }
@@ -40,7 +40,7 @@ module.exports = class Api extends Module {
     handleRequest(req, res) {
 
         try {
-            var model = mongoose.model(req.params.model);
+            var model = Application.modules[this.config.dbModuleName].getModel(req.params.model);
         } catch (e) {
             res.status();
             return res.err("model " + req.params.model + " does not exist");
@@ -274,6 +274,22 @@ module.exports = class Api extends Module {
                         status: 302,
                         redirect: this.config.loginPath
                     });
+                }
+
+                if (page.requires.permissions && !req.user.admin) {
+                    if (typeof page.requires.permissions === "string") {
+                        page.requires.permissions = [page.requires.permissions];
+                    }
+
+                    for (var i = 0; i < page.requires.permissions.length; i++) {
+                        var permission = page.requires.permissions[i];
+                        if (req.user.permissions.indexOf(permission) == -1) {
+                            return resolve({
+                                status: 302,
+                                redirect: this.config.loginPath
+                            });
+                        }
+                    }
                 }
             }
 
