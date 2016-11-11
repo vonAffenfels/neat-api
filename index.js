@@ -189,7 +189,23 @@ module.exports = class Api extends Module {
                     res.json(Tools.getPaginationForCount(count, req.body.limit || 15, req.body.page, req.body.pagesInView, req));
                 });
                 break;
+            case "schema":
+                if (Application.modules[this.config.authModuleName]) {
+                    if (!Application.modules[this.config.authModuleName].hasPermission(req, req.params.model, "schema", null, query)) {
+                        return res.status(401).end();
+                    }
+                }
 
+                return this.getSchemaForModel(model).then((data) => {
+                    res.json(data);
+                }, (err) => {
+                    res.err(err);
+                });
+                break;
+            default:
+                res.status(501);
+                res.end();
+                break;
         }
 
     }
@@ -239,6 +255,29 @@ module.exports = class Api extends Module {
             this.pages = pages;
 
             resolve();
+        });
+    }
+
+    getSchemaForModel(model) {
+        var cleanSchema = {};
+
+        return new Promise((resolve, reject) => {
+
+            for (var key in model.schema.paths) {
+                var conf = JSON.parse(JSON.stringify(model.schema.paths[key]));
+
+                delete conf.options;
+
+                cleanSchema[key] = {
+                    options: conf.options,
+                    enumValues: conf.enumValues,
+                    regExp: conf.regExp,
+                    path: conf.path,
+                    instance: conf.instance
+                };
+            }
+
+            resolve(cleanSchema);
         });
     }
 
