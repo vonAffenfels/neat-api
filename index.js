@@ -52,6 +52,7 @@ module.exports = class Api extends Module {
         var sort = req.body.sort || {};
         var query = req.body.query || {};
         var select = req.body.select || {};
+        var field = req.body.field || null;
         var populate = req.body.populate || [];
         var projection = req.body.projection || null;
 
@@ -198,6 +199,40 @@ module.exports = class Api extends Module {
 
                 return this.getSchemaForModel(model).then((data) => {
                     res.json(data);
+                }, (err) => {
+                    res.err(err);
+                });
+                break;
+            case "dropdownoptions":
+                if (Application.modules[this.config.authModuleName]) {
+                    if (!Application.modules[this.config.authModuleName].hasPermission(req, req.params.model, "find", null, query)) {
+                        return res.status(401).end();
+                    }
+                }
+
+                var preAggregateQuery = {};
+                var aggregateProject = {};
+
+                preAggregateQuery[field] = {
+                    $exists: true
+                };
+
+                aggregateProject._id = "$" + field;
+
+                return model.aggregate([
+                    {
+                        $match: preAggregateQuery
+                    },
+                    {
+                        $project: aggregateProject
+                    },
+                    {
+                        $group: {
+                            _id: "$_id"
+                        }
+                    }
+                ]).then((results) => {
+                    res.json(results.map(v => v._id));
                 }, (err) => {
                     res.err(err);
                 });
