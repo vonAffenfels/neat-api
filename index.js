@@ -17,6 +17,7 @@ module.exports = class Api extends Module {
             loginPath: "/login",
             elementsModuleName: "elements",
             webserverModuleName: "webserver",
+            projectionModuleName: "projection",
             authModuleName: "auth"
         }
     }
@@ -52,6 +53,7 @@ module.exports = class Api extends Module {
         var query = req.body.query || {};
         var select = req.body.select || {};
         var populate = req.body.populate || [];
+        var projection = req.body.projection || null;
 
         switch (req.params.action) {
             case "find":
@@ -61,7 +63,13 @@ module.exports = class Api extends Module {
                     }
                 }
 
-                model.find(query).limit(limit).skip(limit * page).populate(populate).select(select).sort(sort).then((docs) => {
+                var dbQuery = model.find(query).limit(limit).skip(limit * page).populate(populate).select(select).sort(sort);
+
+                if (projection && Application.modules[this.config.projectionModuleName]) {
+                    dbQuery.projection(projection, req);
+                }
+
+                dbQuery.exec().then((docs) => {
                     res.json(docs);
                 }, (err) => {
                     res.err(err);
@@ -74,7 +82,13 @@ module.exports = class Api extends Module {
                     }
                 }
 
-                model.findOne(query).select(select).sort(sort).populate(populate).then((doc) => {
+                var dbQuery = model.findOne(query).select(select).sort(sort).populate(populate);
+
+                if (projection && Application.modules[this.config.projectionModuleName]) {
+                    dbQuery.projection(projection, req);
+                }
+
+                dbQuery.exec().then((doc) => {
                     res.json(doc);
                 }, (err) => {
                     res.err(err);
