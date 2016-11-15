@@ -121,7 +121,7 @@ module.exports = class Api extends Module {
                 }
 
                 model.count(query).then((count) => {
-                    res.end(count);
+                    res.end(count.toString());
                 }, (err) => {
                     res.err(err);
                 });
