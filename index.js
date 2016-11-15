@@ -356,6 +356,8 @@ module.exports = class Api extends Module {
                 });
             }
 
+            req.activePage = page;
+
             if (page && page.requires && page.requires.auth) {
                 if (!req.user) {
                     return resolve({
@@ -382,16 +384,49 @@ module.exports = class Api extends Module {
             }
 
             var status = page.status || 200;
+            var pagePreparationPromise = Promise.resolve();
 
-            return Application.modules[this.config.elementsModuleName].dispatchElementsInSlots(page.slots, req).then((dispatchedSlots) => {
-                resolve({
-                    layout: page.layout || "default",
-                    url: req.path,
-                    status: status,
-                    meta: req.meta,
-                    data: dispatchedSlots
+            if (page.model) {
+                pagePreparationPromise = new Promise((pageItemResolve, reject) => {
+
+                    var pageItemModel = Application.modules[this.config.dbModuleName].getModel(page.model.name);
+
+                    return pageItemModel.findOne({
+                        _id: req.params._id
+                    }).populate(page.model.populate || []).then((doc) => {
+
+                        if (!doc) {
+                            this.log.debug("No Document found in model " + page.model.name + " for id " + req.params._id)
+                            return resolve({
+                                status: 404
+                            });
+                        }
+
+                        req.activePageItem = doc;
+                        req.activePageItemType = page.model;
+
+                        return pageItemResolve();
+                    }, reject);
                 });
-            }, reject);
+            }
+
+            pagePreparationPromise.then(() => {
+                return Application.modules[this.config.elementsModuleName].dispatchElementsInSlots(page.slots, req).then((dispatchedSlots) => {
+                    resolve({
+                        layout: page.layout || "default",
+                        url: req.path,
+                        status: status,
+                        meta: req.meta,
+                        data: dispatchedSlots
+                    });
+                }, reject);
+            }, (err) => {
+                this.log.error(err);
+                return resolve({
+                    status: 500
+                });
+            })
+
         });
     }
 
