@@ -43,10 +43,11 @@ module.exports = class Api extends Module {
         try {
             var model = Application.modules[this.config.dbModuleName].getModel(req.params.model);
         } catch (e) {
-            res.status();
+            res.status(400);
             return res.err("model " + req.params.model + " does not exist");
         }
 
+        var mongoose = Application.modules[this.config.dbModuleName].mongoose;
         var limit = req.body.limit || 10;
         var page = req.body.page || 0;
         var sort = req.body.sort || {};
@@ -129,6 +130,10 @@ module.exports = class Api extends Module {
             case "save":
                 var getPromise = Promise.resolve();
 
+                if (!req.body.data) {
+                    return res.err(new Error("no data"), 400);
+                }
+
                 delete req.body.data.__v;
                 req.body.data._version = null; // save means new version, so in case any version was submitted, just ignore it
 
@@ -155,15 +160,127 @@ module.exports = class Api extends Module {
                         }
                     }
 
-                    doc.save().then(() => {
-                        return model.findOne({
-                            _id: doc._id
-                        }).populate(populate)
-                    }).then((doc) => {
-                        res.json(doc);
-                    }, (err) => {
-                        res.err(err);
-                    });
+                    if (req.body.saveReferences) {
+
+                        if (!(req.body.saveReferences instanceof Array)) {
+                            return res.err(new Error("saveReferences must be an Array with schema paths"));
+                        }
+
+                        return Promise.map(req.body.saveReferences, (path) => {
+
+                            var pathConfig = model.schema.paths[path];
+
+                            if (!pathConfig) {
+                                throw new Error("path " + path + " does not exist");
+                            }
+
+                            if (pathConfig instanceof mongoose.Schema.Types.Array && pathConfig.caster instanceof mongoose.Schema.Types.ObjectId) {
+                                // path is an array, we need to save multiple things
+                                var relatedModel = Application.modules[this.config.dbModuleName].getModel(pathConfig.caster.options.ref);
+                                var data = req.body.data[path];
+
+                                return Promise.map(data, (data, index) => {
+                                    var itemDoc;
+                                    var itemPromise = Promise.resolve(new relatedModel({}));
+
+                                    if (data._id) {
+                                        itemPromise = relatedModel.findOne({
+                                            _id: data._id
+                                        });
+                                    }
+
+                                    return itemPromise.then((tempItemDoc) => {
+                                        itemDoc = tempItemDoc;
+                                        for (var field in data) {
+                                            itemDoc.set(field, data[field]);
+                                        }
+
+                                        return itemDoc.save();
+                                    }).then(() => {
+                                        return itemDoc;
+                                    }, (err) => {
+                                        var formatted = Tools.formatMongooseError(err);
+                                        var childFormatted = {};
+
+                                        for (var key in formatted) {
+                                            childFormatted[path + "." + index + "." + key] = formatted[key];
+                                        }
+
+                                        var newErr = Error("child error");
+                                        newErr.formatted = childFormatted;
+
+                                        throw newErr;
+                                    });
+                                }).then((docs) => {
+                                    doc.set(path, docs);
+                                });
+                            } else if (pathConfig instanceof mongoose.Schema.Types.ObjectId) {
+                                // path is a single reference
+                                var relatedModel = Application.modules[this.config.dbModuleName].getModel(pathConfig.options.ref);
+                                var data = req.body.data[path];
+                                var itemDoc;
+                                var itemPromise = Promise.resolve(new relatedModel({}));
+
+                                if (data._id) {
+                                    itemPromise = relatedModel.findOne({
+                                        _id: data._id
+                                    })
+                                }
+
+                                return itemPromise.then((tempItemDoc) => {
+                                    itemDoc = tempItemDoc;
+                                    for (var field in data) {
+                                        itemDoc.set(field, data[field]);
+                                    }
+
+                                    return itemDoc.save();
+                                }).then(() => {
+                                    doc.set(path, itemDoc._id);
+                                }, (err) => {
+                                    var formatted = Tools.formatMongooseError(err);
+                                    var childFormatted = {};
+
+                                    for (var key in formatted) {
+                                        childFormatted[path + "." + key] = formatted[key];
+                                    }
+
+                                    var newErr = Error("child error");
+                                    newErr.formatted = childFormatted;
+
+                                    throw newErr;
+                                });
+                            } else {
+                                throw new Error("path " + path + " is not a supported reference to save, sorry");
+                            }
+                        }).then(() => {
+                            return doc.save().then(() => {
+                                return model.findOne({
+                                    _id: doc._id
+                                }).populate(populate)
+                            }).then((doc) => {
+                                res.json(doc);
+                            }, (err) => {
+                                res.err(err);
+                            });
+                        }, (err) => {
+                            if (err.formatted) {
+                                res.status(400);
+                                return res.json(err.formatted);
+                            }
+
+                            res.err(err);
+                        });
+                    } else {
+                        return doc.save().then(() => {
+                            return model.findOne({
+                                _id: doc._id
+                            }).populate(populate)
+                        }).then((doc) => {
+                            res.json(doc);
+                        }, (err) => {
+                            res.err(err);
+                        });
+                    }
                 })
                 break;
             case "remove":
