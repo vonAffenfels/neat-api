@@ -210,7 +210,7 @@ module.exports = class Api extends Module {
                     }
                 }
 
-                var preAggregateQuery = {};
+                var preAggregateQuery = query;
                 var aggregateProject = {};
 
                 preAggregateQuery[field] = {
