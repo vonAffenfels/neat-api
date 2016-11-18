@@ -417,7 +417,6 @@ module.exports = class Api extends Module {
 
             for (var key in model.schema.paths) {
                 var conf = JSON.parse(JSON.stringify(model.schema.paths[key]));
-
                 delete conf.options;
 
                 cleanSchema[key] = {
@@ -425,7 +424,8 @@ module.exports = class Api extends Module {
                     enumValues: conf.enumValues,
                     regExp: conf.regExp,
                     path: conf.path,
-                    instance: conf.instance
+                    instance: conf.instance,
+                    defaultValue: conf.defaultValue || null
                 };
             }
 
