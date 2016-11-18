@@ -423,7 +423,7 @@ module.exports = class Api extends Module {
                     regExp: conf.regExp,
                     path: conf.path,
                     instance: conf.instance,
-                    defaultValue: conf.defaultValue || null,
+                    defaultValue: conf.defaultValue || conf.options.default || null,
                     map: conf.options.map || null
                 };
             }
