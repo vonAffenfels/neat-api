@@ -417,15 +417,14 @@ module.exports = class Api extends Module {
 
             for (var key in model.schema.paths) {
                 var conf = JSON.parse(JSON.stringify(model.schema.paths[key]));
-                delete conf.options;
 
                 cleanSchema[key] = {
-                    options: conf.options,
-                    enumValues: conf.enumValues,
+                    enumValues: conf.enumValues || conf.options.enum,
                     regExp: conf.regExp,
                     path: conf.path,
                     instance: conf.instance,
-                    defaultValue: conf.defaultValue || null
+                    defaultValue: conf.defaultValue || null,
+                    map: conf.options.map || null
                 };
             }
 
