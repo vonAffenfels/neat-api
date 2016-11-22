@@ -103,10 +103,18 @@ module.exports = class Api extends Module {
                     }
                 }
 
+                if (populate && populate.length) {
+                    select = null;
+                }
+
                 model.findOne(query).select(select).sort(sort).then((doc) => {
                     return Promise.map(doc.get("_versions"), (obj) => {
-                        var doc = new model(obj);
-                        return doc.populate(populate).execPopulate();
+                        if (select) {
+                            return obj
+                        } else {
+                            var doc = new model(obj);
+                            return doc.populate(populate).execPopulate();
+                        }
                     }).then((docs) => {
                         return res.json(docs);
                     });
