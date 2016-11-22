@@ -127,6 +127,23 @@ module.exports = class Api extends Module {
                     res.err(err);
                 });
                 break;
+            case "update":
+                if (Application.modules[this.config.authModuleName]) {
+                    if (!Application.modules[this.config.authModuleName].hasPermission(req, req.params.model, "save")) {
+                        return res.status(401).end();
+                    }
+                }
+
+                model.update(query, {
+                    $set: req.body.data
+                }, {
+                    multi: true
+                }).then(() => {
+                    res.json({});
+                }, (err) => {
+                    res.err(err);
+                });
+                break;
             case "save":
                 var getPromise = Promise.resolve();
 
