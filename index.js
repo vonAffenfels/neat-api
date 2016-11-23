@@ -537,7 +537,7 @@ module.exports = class Api extends Module {
                     }).populate(page.model.populate || []);
 
                     if (page.model.projection) {
-                        query.projection(page.model.projection);
+                        query.projection(page.model.projection, req);
                     }
 
                     return query.then((doc) => {
