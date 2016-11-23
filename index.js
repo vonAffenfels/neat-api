@@ -532,9 +532,15 @@ module.exports = class Api extends Module {
 
                     var pageItemModel = Application.modules[this.config.dbModuleName].getModel(page.model.name);
 
-                    return pageItemModel.findOne({
+                    var query = pageItemModel.findOne({
                         _id: req.params._id
-                    }).populate(page.model.populate || []).then((doc) => {
+                    }).populate(page.model.populate || []);
+
+                    if (page.model.projection) {
+                        query.projection(page.model.projection);
+                    }
+
+                    return query.then((doc) => {
 
                         if (!doc) {
                             this.log.debug("No Document found in model " + page.model.name + " for id " + req.params._id)
