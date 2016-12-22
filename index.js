@@ -512,7 +512,7 @@ module.exports = class Api extends Module {
                 if (!req.user) {
                     return resolve({
                         status: 302,
-                        redirect: this.config.loginPath
+                        redirect: this.config.loginPath + "?return=" + req.path
                     });
                 }
 
@@ -526,7 +526,7 @@ module.exports = class Api extends Module {
                         if (req.user.permissions.indexOf(permission) == -1) {
                             return resolve({
                                 status: 302,
-                                redirect: this.config.loginPath
+                                redirect: this.config.loginPath + "?return=" + req.path
                             });
                         }
                     }
