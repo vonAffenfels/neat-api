@@ -217,6 +217,10 @@ module.exports = class Api extends Module {
                                     return itemPromise.then((tempItemDoc) => {
                                         itemDoc = tempItemDoc;
                                         for (var field in data) {
+                                            if (field === "__v") {
+                                                continue;
+                                            }
+
                                             itemDoc.set(field, data[field]);
                                         }
 
@@ -255,6 +259,10 @@ module.exports = class Api extends Module {
                                 return itemPromise.then((tempItemDoc) => {
                                     itemDoc = tempItemDoc;
                                     for (var field in data) {
+                                        if (field === "__v") {
+                                            continue;
+                                        }
+
                                         itemDoc.set(field, data[field]);
                                     }
 
@@ -306,7 +314,8 @@ module.exports = class Api extends Module {
                             res.err(err);
                         });
                     }
-                })
+                });
+
                 break;
             case "remove":
                 if (Application.modules[this.config.authModuleName]) {
