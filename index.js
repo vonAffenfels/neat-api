@@ -174,6 +174,10 @@ module.exports = class Api extends Module {
                         doc.set("_createdBy", req.user ? req.user._id : null);
                     } else {
                         for (var key in req.body.data) {
+                            if (field === "__v") {
+                                continue;
+                            }
+
                             doc.set(key, req.body.data[key]);
                         }
                         doc.set("_updatedBy", req.user ? req.user._id : null);
@@ -512,7 +516,7 @@ module.exports = class Api extends Module {
                 if (!req.user) {
                     return resolve({
                         status: 302,
-                        redirect: this.config.loginPath + "?return=" + req.path
+                        redirect: this.config.loginPath
                     });
                 }
 
@@ -526,7 +530,7 @@ module.exports = class Api extends Module {
                         if (req.user.permissions.indexOf(permission) == -1) {
                             return resolve({
                                 status: 302,
-                                redirect: this.config.loginPath + "?return=" + req.path
+                                redirect: this.config.loginPath
                             });
                         }
                     }
