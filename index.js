@@ -208,6 +208,11 @@ module.exports = class Api extends Module {
                                 var relatedModel = Application.modules[this.config.dbModuleName].getModel(pathConfig.caster.options.ref);
                                 var data = req.body.data[path];
 
+                                // If not array make one
+                                if (!Array.isArray(data)) {
+                                    data = [data].filter(v => !!v);
+                                }
+
                                 return Promise.map(data, (data, index) => {
                                     var itemDoc;
                                     var itemPromise = Promise.resolve(new relatedModel({}));
