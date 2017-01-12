@@ -298,13 +298,8 @@ module.exports = class Api extends Module {
                             return doc.save().then(() => {
                                 return model.findOne({
                                     _id: doc._id
-                                }).populate(populate)
+                                }).read("primary").populate(populate)
                             }).then((newDoc) => {
-                                if (newDoc.get("__v") <= doc.get("__v")) {
-                                    // Query resulted in the old version
-                                    // so we return the modified old document
-                                    newDoc = doc;
-                                }
                                 res.json(newDoc);
                             }, (err) => {
                                 res.err(err);
@@ -321,13 +316,8 @@ module.exports = class Api extends Module {
                         return doc.save().then(() => {
                             return model.findOne({
                                 _id: doc._id
-                            }).populate(populate)
+                            }).read("primary").populate(populate)
                         }).then((newDoc) => {
-                            if (newDoc.get("__v") <= doc.get("__v")) {
-                                // Query resulted in the old version
-                                // so we return the modified old document
-                                newDoc = doc;
-                            }
                             res.json(newDoc);
                         }, (err) => {
                             res.err(err);
