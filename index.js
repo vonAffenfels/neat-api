@@ -292,7 +292,8 @@ module.exports = class Api extends Module {
                                     throw newErr;
                                 });
                             } else {
-                                throw new Error("path " + path + " is not a supported reference to save, sorry");
+                                this.log.warn("path " + path + " is not a supported reference to save");
+                                return;
                             }
                         }).then(() => {
                             return doc.save().then(() => {
