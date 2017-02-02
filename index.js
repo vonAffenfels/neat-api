@@ -578,6 +578,19 @@ module.exports = class Api extends Module {
 
             pagePreparationPromise.then(() => {
                 return Application.modules[this.config.elementsModuleName].dispatchElementsInSlots(page.slots, req).then((dispatchedSlots) => {
+
+                    // allow elements to modify the status code (for example set 500 if they fail)
+                    // you could set this option on your meta element to prevent the page from going 200 OK in case the db or something is down
+                    for(var slot in dispatchedSlots) {
+                        for (let i = 0; i < dispatchedSlots[slot].length; i++) {
+                            let el = dispatchedSlots[slot][i];
+
+                            if(el.statusCodeIfError && el.isError) {
+                                status = el.statusCodeIfError;
+                            }
+                        }
+                    }
+
                     resolve({
                         layout: page.layout || "default",
                         url: req.path,
