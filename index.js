@@ -4,6 +4,7 @@ var Application = require("neat-base").Application;
 var Module = require("neat-base").Module;
 var Tools = require("neat-base").Tools;
 var redis = require("redis");
+var apeStatus = require('ape-status');
 var Promise = require("bluebird");
 var crypto = require('crypto');
 var fs = require('fs');
@@ -47,15 +48,17 @@ module.exports = class Api extends Module {
             return res.err("model " + req.params.model + " does not exist");
         }
 
-        var mongoose = Application.modules[this.config.dbModuleName].mongoose;
-        var limit = req.body.limit || 10;
-        var page = req.body.page || 0;
-        var sort = req.body.sort || {};
-        var query = req.body.query || {};
-        var select = req.body.select || {};
-        var field = req.body.field || null;
-        var populate = req.body.populate || [];
-        var projection = req.body.projection || null;
+        let mongoose = Application.modules[this.config.dbModuleName].mongoose;
+        let limit = req.body.limit || 10;
+        let page = req.body.page || 0;
+        let sort = req.body.sort || {};
+        let query = req.body.query || {};
+        let select = req.body.select || {};
+        let field = req.body.field || null;
+        let populate = req.body.populate || [];
+        let projection = req.body.projection || null;
+        let dbQuery;
+        let data = req.body.data;
 
         switch (req.params.action) {
             case "find":
@@ -65,9 +68,22 @@ module.exports = class Api extends Module {
                     }
                 }
 
-                var dbQuery = model.find(query).limit(limit).skip(limit * page).populate(populate).select(select).sort(sort);
+                dbQuery = model.find(query).limit(limit).skip(limit * page).populate(populate).select(select).sort(sort);
 
-                if (projection && Application.modules[this.config.projectionModuleName]) {
+                // if the request didn't ask for a projection allow this only if the user has either complete access to the model or the specific action permission
+                if (!projection) {
+                    if (!req.user || !req.user.hasPermission([
+                            req.params.model,
+                            req.params.model + "." + req.params.action
+                        ])) {
+                        return res.status(401).end("No projection given or no permission to use this projection. Or the projection is missing in the config...");
+                    }
+                } else if (projection && Application.modules[this.config.projectionModuleName]) {
+                    // check if the current user has permission to use this projection
+                    if (!Application.modules[this.config.projectionModuleName].hasPermission(req.user, req.params.model, projection)) {
+                        return res.status(401).end("No projection given or no permission to use this projection");
+                    }
+
                     dbQuery.projection(projection, req);
                 }
 
@@ -84,7 +100,7 @@ module.exports = class Api extends Module {
                     }
                 }
 
-                var dbQuery = model.findOne(query).select(select).sort(sort).populate(populate);
+                dbQuery = model.findOne(query).select(select).sort(sort).populate(populate);
 
                 if (projection && Application.modules[this.config.projectionModuleName]) {
                     dbQuery.projection(projection, req);
@@ -110,9 +126,9 @@ module.exports = class Api extends Module {
                 model.findOne(query).select(select).sort(sort).then((doc) => {
                     return Promise.map(doc.get("_versions"), (obj) => {
                         if (select) {
-                            return obj
+                            return obj;
                         } else {
-                            var doc = new model(obj);
+                            let doc = new model(obj);
                             return doc.populate(populate).execPopulate();
                         }
                     }).then((docs) => {
@@ -142,8 +158,14 @@ module.exports = class Api extends Module {
                     }
                 }
 
+                data = this.cleanupDataForSave(data, model, req.user);
+
+                if (!data) {
+                    return res.err(new Error("no data"), 400);
+                }
+
                 model.update(query, {
-                    $set: req.body.data
+                    $set: data
                 }, {
                     multi: true
                 }).then(() => {
@@ -153,32 +175,33 @@ module.exports = class Api extends Module {
                 });
                 break;
             case "save":
-                var getPromise = Promise.resolve();
+                let getPromise = Promise.resolve();
+                let isUpdate = false;
 
-                if (!req.body.data) {
+                data = this.cleanupDataForSave(data, model, req.user);
+
+                if (!data) {
                     return res.err(new Error("no data"), 400);
                 }
 
-                delete req.body.data.__v;
-                req.body.data._version = null; // save means new version, so in case any version was submitted, just ignore it
-
-                if (req.body.data._id) {
+                if (data._id) {
+                    isUpdate = true;
                     getPromise = model.findOne({
-                        _id: req.body.data._id
+                        _id: data._id
                     });
                 }
 
                 getPromise.then((doc) => {
                     if (!doc) {
-                        doc = new model(req.body.data);
+                        if (isUpdate) {
+                            return res.status(404).end();
+                        }
+
+                        doc = new model(data);
                         doc.set("_createdBy", req.user ? req.user._id : null);
                     } else {
-                        for (var key in req.body.data) {
-                            if (field === "__v") {
-                                continue;
-                            }
-
-                            doc.set(key, req.body.data[key]);
+                        for (let key in data) {
+                            doc.set(key, data[key]);
                         }
                         doc.set("_updatedBy", req.user ? req.user._id : null);
                     }
@@ -197,7 +220,7 @@ module.exports = class Api extends Module {
 
                         return Promise.map(req.body.saveReferences, (path) => {
 
-                            var pathConfig = model.schema.paths[path];
+                            let pathConfig = model.schema.paths[path];
 
                             if (!pathConfig) {
                                 throw new Error("path " + path + " does not exist");
@@ -205,46 +228,48 @@ module.exports = class Api extends Module {
 
                             if (pathConfig instanceof mongoose.Schema.Types.Array && pathConfig.caster instanceof mongoose.Schema.Types.ObjectId) {
                                 // path is an array, we need to save multiple things
-                                var relatedModel = Application.modules[this.config.dbModuleName].getModel(pathConfig.caster.options.ref);
-                                var data = req.body.data[path];
+                                let relatedModel = Application.modules[this.config.dbModuleName].getModel(pathConfig.caster.options.ref);
+                                let subdata = data[path];
+
+                                subdata = this.cleanupDataForSave(subdata, model, req.user);
 
                                 // If not array make one
-                                if (!Array.isArray(data)) {
-                                    data = [data].filter(v => !!v);
+                                if (!Array.isArray(subdata)) {
+                                    subdata = [subdata].filter(v => !!v);
                                 }
 
-                                return Promise.map(data, (data, index) => {
-                                    var itemDoc;
-                                    var itemPromise = Promise.resolve(new relatedModel({}));
+                                return Promise.map(subdata, (subdata, index) => {
+                                    let itemDoc;
+                                    let itemPromise = Promise.resolve(new relatedModel({}));
 
-                                    if (data._id) {
+                                    if (subdata._id) {
                                         itemPromise = relatedModel.findOne({
-                                            _id: data._id
+                                            _id: subdata._id
                                         });
                                     }
 
                                     return itemPromise.then((tempItemDoc) => {
                                         itemDoc = tempItemDoc;
-                                        for (var field in data) {
+                                        for (let field in subdata) {
                                             if (field === "__v") {
                                                 continue;
                                             }
 
-                                            itemDoc.set(field, data[field]);
+                                            itemDoc.set(field, subdata[field]);
                                         }
 
                                         return itemDoc.save();
                                     }).then(() => {
                                         return itemDoc;
                                     }, (err) => {
-                                        var formatted = Tools.formatMongooseError(err);
-                                        var childFormatted = {};
+                                        let formatted = Tools.formatMongooseError(err);
+                                        let childFormatted = {};
 
-                                        for (var key in formatted) {
+                                        for (let key in formatted) {
                                             childFormatted[path + "." + index + "." + key] = formatted[key];
                                         }
 
-                                        var newErr = Error("child error");
+                                        let newErr = Error("child error");
                                         newErr.formatted = childFormatted;
 
                                         throw newErr;
@@ -254,39 +279,40 @@ module.exports = class Api extends Module {
                                 });
                             } else if (pathConfig instanceof mongoose.Schema.Types.ObjectId) {
                                 // path is a single reference
-                                var relatedModel = Application.modules[this.config.dbModuleName].getModel(pathConfig.options.ref);
-                                var data = req.body.data[path];
-                                var itemDoc;
-                                var itemPromise = Promise.resolve(new relatedModel({}));
+                                let relatedModel = Application.modules[this.config.dbModuleName].getModel(pathConfig.options.ref);
+                                let subdata = data[path];
+                                subdata = this.cleanupDataForSave(subdata, model, req.user);
+                                let itemDoc;
+                                let itemPromise = Promise.resolve(new relatedModel({}));
 
-                                if (data._id) {
+                                if (subdata._id) {
                                     itemPromise = relatedModel.findOne({
-                                        _id: data._id
+                                        _id: subdata._id
                                     })
                                 }
 
                                 return itemPromise.then((tempItemDoc) => {
                                     itemDoc = tempItemDoc;
-                                    for (var field in data) {
+                                    for (let field in subdata) {
                                         if (field === "__v") {
                                             continue;
                                         }
 
-                                        itemDoc.set(field, data[field]);
+                                        itemDoc.set(field, subdata[field]);
                                     }
 
                                     return itemDoc.save();
                                 }).then(() => {
                                     doc.set(path, itemDoc._id);
                                 }, (err) => {
-                                    var formatted = Tools.formatMongooseError(err);
-                                    var childFormatted = {};
+                                    let formatted = Tools.formatMongooseError(err);
+                                    let childFormatted = {};
 
-                                    for (var key in formatted) {
+                                    for (let key in formatted) {
                                         childFormatted[path + "." + key] = formatted[key];
                                     }
 
-                                    var newErr = Error("child error");
+                                    let newErr = Error("child error");
                                     newErr.formatted = childFormatted;
 
                                     throw newErr;
@@ -371,8 +397,8 @@ module.exports = class Api extends Module {
                     }
                 }
 
-                var preAggregateQuery = query;
-                var aggregateProject = {};
+                let preAggregateQuery = query;
+                let aggregateProject = {};
 
                 preAggregateQuery[field] = {
                     $exists: true
@@ -406,6 +432,70 @@ module.exports = class Api extends Module {
 
     }
 
+    /**
+     *
+     * @param {{}} data
+     * @param {Model} model
+     * @param {Document} user
+     * @returns {{}}
+     */
+    cleanupDataForSave(data, model, user) {
+        // remove __v by default, you cant update it anyways
+        delete data.__v;
+        // save means new version, so in case any version was submitted, just ignore it
+        data._version = null;
+
+        let forbiddenPaths = [];
+        let paths = model.schema.paths;
+        let modelName = new model().constructor.modelName; // @TODO really isnt there a better way? wasted...
+
+        // checks paths for non public paths
+        for (let path in paths) {
+            let pathConfig = paths[path];
+
+            if (pathConfig.options.permission === undefined) {
+                // no permission option set, so if other permissions are ok he might modify this field
+            } else if (pathConfig.options.permission === false) {
+                // no permission, check for the required permissions
+                if (!user) {
+                    // no user ? no permission ! probably wont get past the check in api/save anyways...
+                    forbiddenPaths.push(path);
+                } else if (!user.hasPermission([
+                        modelName,
+                        modelName + ".save"
+                    ])) {
+                    // no general or specific save permission
+                    forbiddenPaths.push(path);
+                }
+            } else if (typeof pathConfig.options.permission === "string") {
+                // specific permission to modify this field
+                if (!user.hasPermission(pathConfig.options.permission)) {
+                    forbiddenPaths.push(path);
+                }
+            }
+        }
+
+        // @TODO ok we get more creative here, feel free to refactor...
+        let tempData = new model(data); // make temp model just to have access to mongoose functionality
+        let finalData = {};
+
+        for (let path in paths) {
+            // check if the user is not allowed to modify this path
+            if (forbiddenPaths.indexOf(path) !== -1) {
+                this.log.debug("Ignored path " + path + " for save, insufficient permissions");
+                continue;
+            }
+
+            if (!tempData.isModified(path)) {
+                continue;
+            }
+
+            finalData[path] = tempData.get(path);
+        }
+
+        return finalData;
+    }
+
     start() {
         return new Promise((resolve, reject) => {
             this.log.debug("Starting...");
@@ -422,24 +512,24 @@ module.exports = class Api extends Module {
 
     loadStaticPages() {
         return new Promise((resolve, reject) => {
-            var rootDir = Application.config.config_path + "/pages";
+            let rootDir = Application.config.config_path + "/pages";
 
             if (!fs.existsSync(rootDir)) {
                 fs.mkdirSync(rootDir);
             }
 
-            var files = fs.readdirSync(rootDir);
-            var pages = {};
+            let files = fs.readdirSync(rootDir);
+            let pages = {};
 
-            for (var i = 0; i < files.length; i++) {
-                var file = files[i];
+            for (let i = 0; i < files.length; i++) {
+                let file = files[i];
 
                 if (file.indexOf(".json") === -1) {
                     continue;
                 }
 
-                var config = Tools.loadCommentedConfigFile(rootDir + "/" + file);
-                for (var key in config) {
+                let config = Tools.loadCommentedConfigFile(rootDir + "/" + file);
+                for (let key in config) {
                     if (pages[key]) {
                         this.log.warn("Page " + key + " duplicated");
                     }
@@ -455,12 +545,16 @@ module.exports = class Api extends Module {
     }
 
     getSchemaForModel(model) {
-        var cleanSchema = {};
+        let cleanSchema = {};
 
         return new Promise((resolve, reject) => {
 
-            for (var key in model.schema.paths) {
-                var conf = JSON.parse(JSON.stringify(model.schema.paths[key]));
+            for (let key in model.schema.paths) {
+                let conf = JSON.parse(JSON.stringify(model.schema.paths[key]));
+
+                if (!conf) {
+                    continue;
+                }
 
                 cleanSchema[key] = {
                     enumValues: conf.enumValues || conf.options.enum,
@@ -477,8 +571,8 @@ module.exports = class Api extends Module {
     }
 
     getPageFromRequest(req) {
-        for (var key in this.pages) {
-            var page = this.pages[key];
+        for (let key in this.pages) {
+            let page = this.pages[key];
             page.id = key;
 
             if (page.regexp) {
@@ -487,13 +581,13 @@ module.exports = class Api extends Module {
                 }
             }
 
-            var keys = [];
-            var re = pathToRegexp(page.path, keys);
-            var result = re.exec(req.path);
+            let keys = [];
+            let re = pathToRegexp(page.path, keys);
+            let result = re.exec(req.path);
 
             if (result) {
-                for (var i = 0; i < keys.length; i++) {
-                    var key = keys[i];
+                for (let i = 0; i < keys.length; i++) {
+                    let key = keys[i];
                     req.params[key.name] = result[i + 1];
                 }
 
@@ -508,7 +602,7 @@ module.exports = class Api extends Module {
 
     getPageJson(req) {
         return new Promise((resolve, reject) => {
-            var page = this.getPageFromRequest(req);
+            let page = this.getPageFromRequest(req);
 
             if (!page) {
                 return resolve({
@@ -531,8 +625,8 @@ module.exports = class Api extends Module {
                         page.requires.permissions = [page.requires.permissions];
                     }
 
-                    for (var i = 0; i < page.requires.permissions.length; i++) {
-                        var permission = page.requires.permissions[i];
+                    for (let i = 0; i < page.requires.permissions.length; i++) {
+                        let permission = page.requires.permissions[i];
                         if (req.user.permissions.indexOf(permission) == -1) {
                             return resolve({
                                 status: 302,
@@ -543,15 +637,15 @@ module.exports = class Api extends Module {
                 }
             }
 
-            var status = page.status || 200;
-            var pagePreparationPromise = Promise.resolve();
+            let status = page.status || 200;
+            let pagePreparationPromise = Promise.resolve();
 
             if (page.model) {
                 pagePreparationPromise = new Promise((pageItemResolve, reject) => {
 
-                    var pageItemModel = Application.modules[this.config.dbModuleName].getModel(page.model.name);
+                    let pageItemModel = Application.modules[this.config.dbModuleName].getModel(page.model.name);
 
-                    var query = pageItemModel.findOne({
+                    let query = pageItemModel.findOne({
                         _id: req.params._id
                     }).populate(page.model.populate || []);
 
@@ -581,11 +675,11 @@ module.exports = class Api extends Module {
 
                     // allow elements to modify the status code (for example set 500 if they fail)
                     // you could set this option on your meta element to prevent the page from going 200 OK in case the db or something is down
-                    for(var slot in dispatchedSlots) {
+                    for (let slot in dispatchedSlots) {
                         for (let i = 0; i < dispatchedSlots[slot].length; i++) {
                             let el = dispatchedSlots[slot][i];
 
-                            if(el.statusCodeIfError && el.isError) {
+                            if (el.statusCodeIfError && (el.isError || el.tooLong)) {
                                 status = el.statusCodeIfError;
                             }
                         }
