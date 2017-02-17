@@ -236,6 +236,7 @@ module.exports = class Api extends Module {
                                     subdata = [subdata].filter(v => !!v);
                                 }
 
+
                                 return Promise.map(subdata, (subdata, index) => {
                                     subdata = this.cleanupDataForSave(subdata, relatedModel, req.user);
 
@@ -251,6 +252,7 @@ module.exports = class Api extends Module {
                                     return itemPromise.then((tempItemDoc) => {
                                         itemDoc = tempItemDoc;
                                         for (let field in subdata) {
+
                                             if (field === "__v") {
                                                 continue;
                                             }
@@ -294,6 +296,7 @@ module.exports = class Api extends Module {
                                 return itemPromise.then((tempItemDoc) => {
                                     itemDoc = tempItemDoc;
                                     for (let field in subdata) {
+
                                         if (field === "__v") {
                                             continue;
                                         }
@@ -326,6 +329,8 @@ module.exports = class Api extends Module {
                                 return model.findOne({
                                     _id: doc._id
                                 }).read("primary").populate(populate)
+                            }, (err) => {
+                                res.err(err);
                             }).then((newDoc) => {
                                 res.json(newDoc);
                             }, (err) => {
@@ -344,6 +349,8 @@ module.exports = class Api extends Module {
                             return model.findOne({
                                 _id: doc._id
                             }).read("primary").populate(populate)
+                        }, (err) => {
+                            res.err(err);
                         }).then((newDoc) => {
                             res.json(newDoc);
                         }, (err) => {
@@ -440,11 +447,12 @@ module.exports = class Api extends Module {
      * @returns {{}}
      */
     cleanupDataForSave(data, model, user) {
-        // remove __v by default, you cant update it anyways
+        // remove __v by default, you cant update it anyways, do it here so we dont get any warnings
         delete data.__v;
-        // save means new version, so in case any version was submitted, just ignore it
+        // save means new version, so in case any version was submitted, just reset it
         data._version = null;
 
+        let mongoose = Application.modules[this.config.dbModuleName].mongoose;
         let forbiddenPaths = [];
         let paths = model.schema.paths;
         let modelName = new model().constructor.modelName; // @TODO really isnt there a better way? wasted...
@@ -476,21 +484,29 @@ module.exports = class Api extends Module {
         }
 
         // @TODO ok we get more creative here, feel free to refactor...
-        let tempData = new model(data); // make temp model just to have access to mongoose functionality
+        let tempDoc = new model(data); // make temp model just to have access to mongoose functionality
         let finalData = {};
 
         for (let path in paths) {
+            let pathConfig = paths[path];
+
             // check if the user is not allowed to modify this path
             if (forbiddenPaths.indexOf(path) !== -1) {
                 this.log.debug("Ignored path " + path + " for save, insufficient permissions");
                 continue;
             }
 
-            if (!tempData.isModified(path)) {
+            // check if this path is a reference, if so completely ignore it, dont modify it at all!
+            if (pathConfig instanceof mongoose.Schema.Types.ObjectId || (pathConfig instanceof mongoose.Schema.Types.Array && pathConfig.caster instanceof mongoose.Schema.Types.ObjectId)) {
+                finalData[path] = data[path]; // get it from the original data, this is required since the model will just return the id
                 continue;
             }
 
-            finalData[path] = tempData.get(path);
+            if (!tempDoc.isModified(path) && path !== "_id") {
+                continue;
+            }
+
+            finalData[path] = tempDoc.get(path);
         }
 
         return finalData;
