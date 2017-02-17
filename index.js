@@ -237,7 +237,7 @@ module.exports = class Api extends Module {
                                 }
 
                                 return Promise.map(subdata, (subdata, index) => {
-                                    subdata = this.cleanupDataForSave(subdata, model, req.user);
+                                    subdata = this.cleanupDataForSave(subdata, relatedModel, req.user);
 
                                     let itemDoc;
                                     let itemPromise = Promise.resolve(new relatedModel({}));
@@ -281,7 +281,7 @@ module.exports = class Api extends Module {
                                 // path is a single reference
                                 let relatedModel = Application.modules[this.config.dbModuleName].getModel(pathConfig.options.ref);
                                 let subdata = data[path];
-                                subdata = this.cleanupDataForSave(subdata, model, req.user);
+                                subdata = this.cleanupDataForSave(subdata, relatedModel, req.user);
                                 let itemDoc;
                                 let itemPromise = Promise.resolve(new relatedModel({}));
 
