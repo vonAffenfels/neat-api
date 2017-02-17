@@ -231,14 +231,14 @@ module.exports = class Api extends Module {
                                 let relatedModel = Application.modules[this.config.dbModuleName].getModel(pathConfig.caster.options.ref);
                                 let subdata = data[path];
 
-                                subdata = this.cleanupDataForSave(subdata, model, req.user);
-
                                 // If not array make one
                                 if (!Array.isArray(subdata)) {
                                     subdata = [subdata].filter(v => !!v);
                                 }
 
                                 return Promise.map(subdata, (subdata, index) => {
+                                    subdata = this.cleanupDataForSave(subdata, model, req.user);
+
                                     let itemDoc;
                                     let itemPromise = Promise.resolve(new relatedModel({}));
 
