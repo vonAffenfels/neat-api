@@ -193,6 +193,7 @@ module.exports = class Api extends Module {
 
                 getPromise.then((doc) => {
                     if (!doc) {
+                        delete data._id;
                         doc = new model(data);
                         doc.set("_createdBy", req.user ? req.user._id : null);
                     } else {
