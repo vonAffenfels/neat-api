@@ -193,10 +193,6 @@ module.exports = class Api extends Module {
 
                 getPromise.then((doc) => {
                     if (!doc) {
-                        if (isUpdate) {
-                            return res.status(404).end();
-                        }
-
                         doc = new model(data);
                         doc.set("_createdBy", req.user ? req.user._id : null);
                     } else {
