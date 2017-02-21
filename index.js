@@ -237,7 +237,7 @@ module.exports = class Api extends Module {
                                     subdata = this.cleanupDataForSave(subdata, relatedModel, req.user);
 
                                     let itemDoc;
-                                    let itemPromise = Promise.resolve(new relatedModel({}));
+                                    let itemPromise = Promise.resolve();
 
                                     if (subdata._id) {
                                         itemPromise = relatedModel.findOne({
@@ -246,10 +246,16 @@ module.exports = class Api extends Module {
                                     }
 
                                     return itemPromise.then((tempItemDoc) => {
+
+                                        if (!tempItemDoc) {
+                                            delete subdata._id;
+                                            itemDoc = new relatedModel(subdata);
+                                        }
+
                                         itemDoc = tempItemDoc;
                                         for (let field in subdata) {
 
-                                            if (field === "__v") {
+                                            if (field === "__v" || field === "_id") {
                                                 continue;
                                             }
 
@@ -281,7 +287,7 @@ module.exports = class Api extends Module {
                                 let subdata = data[path];
                                 subdata = this.cleanupDataForSave(subdata, relatedModel, req.user);
                                 let itemDoc;
-                                let itemPromise = Promise.resolve(new relatedModel({}));
+                                let itemPromise = Promise.resolve();
 
                                 if (subdata._id) {
                                     itemPromise = relatedModel.findOne({
@@ -290,10 +296,16 @@ module.exports = class Api extends Module {
                                 }
 
                                 return itemPromise.then((tempItemDoc) => {
+
+                                    if (!tempItemDoc) {
+                                        delete subdata._id;
+                                        tempItemDoc = new relatedModel(subdata);
+                                    }
+
                                     itemDoc = tempItemDoc;
                                     for (let field in subdata) {
 
-                                        if (field === "__v") {
+                                        if (field === "__v" || field === "_id") {
                                             continue;
                                         }
 
@@ -304,6 +316,7 @@ module.exports = class Api extends Module {
                                 }).then(() => {
                                     doc.set(path, itemDoc._id);
                                 }, (err) => {
+                                    console.log(err);
                                     let formatted = Tools.formatMongooseError(err);
                                     let childFormatted = {};
 
