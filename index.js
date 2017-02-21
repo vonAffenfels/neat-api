@@ -197,6 +197,11 @@ module.exports = class Api extends Module {
                         doc.set("_createdBy", req.user ? req.user._id : null);
                     } else {
                         for (let key in data) {
+
+                            if (field === "__v" || field === "_id") {
+                                continue;
+                            }
+
                             doc.set(key, data[key]);
                         }
                         doc.set("_updatedBy", req.user ? req.user._id : null);
