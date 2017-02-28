@@ -59,6 +59,7 @@ module.exports = class Api extends Module {
         let projection = req.body.projection || null;
         let dbQuery;
         let data = req.body.data;
+        let isFilteringForOwnData = query._createdBy && req.user && query._createdBy + "" === req.user._id + "";
 
         switch (req.params.action) {
             case "find":
@@ -75,7 +76,7 @@ module.exports = class Api extends Module {
                     if (!req.user || !req.user.hasPermission([
                             req.params.model,
                             req.params.model + "." + req.params.action
-                        ])) {
+                        ]) && !isFilteringForOwnData) {
                         return res.status(401).end("No projection given or no permission to use this projection. Or the projection is missing in the config...");
                     }
                 } else if (projection && Application.modules[this.config.projectionModuleName]) {
