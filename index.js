@@ -186,7 +186,6 @@ module.exports = class Api extends Module {
                 }
 
                 if (data._id) {
-                    isUpdate = true;
                     getPromise = model.findOne({
                         _id: data._id
                     });
@@ -194,10 +193,10 @@ module.exports = class Api extends Module {
 
                 getPromise.then((doc) => {
                     if (!doc) {
-                        delete data._id;
                         doc = new model(data);
                         doc.set("_createdBy", req.user ? req.user._id : null);
                     } else {
+                        isUpdate = true;
                         for (let key in data) {
 
                             if (field === "__v" || field === "_id") {
