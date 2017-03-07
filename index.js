@@ -73,10 +73,10 @@ module.exports = class Api extends Module {
 
                 // if the request didn't ask for a projection allow this only if the user has either complete access to the model or the specific action permission
                 if (!projection) {
-                    if (!req.user || !req.user.hasPermission([
+                    if ((!req.user || !req.user.hasPermission([
                             req.params.model,
                             req.params.model + "." + req.params.action
-                        ]) && !isFilteringForOwnData) {
+                        ])) && !isFilteringForOwnData) {
                         return res.status(401).end("No projection given or no permission to use this projection. Or the projection is missing in the config...");
                     }
                 } else if (projection && Application.modules[this.config.projectionModuleName]) {
