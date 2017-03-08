@@ -513,7 +513,7 @@ module.exports = class Api extends Module {
 
             // check if this path is a reference, if so completely ignore it, dont modify it at all!
             if (pathConfig instanceof mongoose.Schema.Types.ObjectId || (pathConfig instanceof mongoose.Schema.Types.Array && pathConfig.caster instanceof mongoose.Schema.Types.ObjectId)) {
-                finalData[path] = data[path]; // get it from the original data, this is required since the model will just return the id
+                finalData[path] = tempDoc.get(path); // get it from the original data, this is required since the model will just return the id
                 continue;
             }
 
