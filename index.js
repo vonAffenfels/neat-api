@@ -18,6 +18,7 @@ module.exports = class Api extends Module {
             elementsModuleName: "elements",
             webserverModuleName: "webserver",
             projectionModuleName: "projection",
+            cacheModuleName: "cache",
             dbModuleName: "database",
             authModuleName: "auth"
         }
@@ -30,6 +31,9 @@ module.exports = class Api extends Module {
             if (Application.modules[this.config.webserverModuleName]) {
                 Application.modules[this.config.webserverModuleName].addRoute("post", "/api/:model/:action", (req, res, next) => {
                     this.handleRequest(req, res);
+                }, 9999);
+                Application.modules[this.config.webserverModuleName].addRoute("get", "/api/:model/changes/:type/:projection/:from?/:to?", (req, res, next) => {
+                    this.handleChangesRequest(req, res);
                 }, 9999);
             }
 
@@ -179,7 +183,7 @@ module.exports = class Api extends Module {
                 let getPromise = Promise.resolve();
                 let isUpdate = false;
 
-                data = this.cleanupDataForSave(data, model, req.user);
+                data = this.cleanupDataForSave(data, model, req.user, true);
 
                 if (!data) {
                     return res.err(new Error("no data"), 400);
@@ -292,6 +296,7 @@ module.exports = class Api extends Module {
                                 let relatedModel = Application.modules[this.config.dbModuleName].getModel(pathConfig.options.ref);
                                 let subdata = data[path];
                                 subdata = this.cleanupDataForSave(subdata, relatedModel, req.user);
+
                                 let itemDoc;
                                 let itemPromise = Promise.resolve();
 
@@ -454,6 +459,86 @@ module.exports = class Api extends Module {
 
     }
 
+
+    /**
+     * /api/:model/changes/:type/:projection/:from?/:to?
+     *
+     * @param req
+     * @param res
+     */
+    handleChangesRequest(req, res) {
+        let supportedTypes = ["json"];
+        let type = req.params.type;
+
+        if (supportedTypes.indexOf(type) === -1) {
+            res.status(400);
+            return res.err("type " + type + " not supported, try on of the following" + supportedTypes.join(","));
+        }
+
+        let projection = req.params.projection;
+        let from = req.params.from;
+        let to = req.params.to;
+        let publishedModel = Application.modules[this.config.dbModuleName].getModel("published");
+
+        if (from) {
+            from = new Date(from);
+        }
+
+        if (to) {
+            to = new Date(to);
+        }
+
+        let query = {
+            model: req.params.model,
+            projection: projection,
+            $and: []
+        };
+
+        if (from) {
+            query.$and.push({
+                _updatedAt: {
+                    $gte: from
+                }
+            });
+        }
+
+        if (to) {
+            query.$and.push({
+                _updatedAt: {
+                    $lte: to
+                }
+            });
+        }
+
+        if (query.$and.length === 0) {
+            delete query.$and;
+        }
+
+        let lastData = null;
+
+        if (type === "json") {
+            res.header("Content-Type", "application/json;charset=UTF-8");
+        }
+
+        res.write("[");
+        publishedModel
+            .find(query)
+            .lean(true)
+            .cursor()
+            .on('data', function (data) {
+                if (lastData) {
+                    res.write(",");
+                }
+                lastData = true;
+                res.write(JSON.stringify(data.data));
+            })
+            .on('end', function () {
+                res.write("]");
+                res.end();
+            });
+    }
+
+
     /**
      *
      * @param {{}} data
@@ -461,7 +546,7 @@ module.exports = class Api extends Module {
      * @param {Document} user
      * @returns {{}}
      */
-    cleanupDataForSave(data, model, user) {
+    cleanupDataForSave(data, model, user, maintainSubDocs) {
         // remove __v by default, you cant update it anyways, do it here so we dont get any warnings
         delete data.__v;
         // save means new version, so in case any version was submitted, just reset it
@@ -513,7 +598,7 @@ module.exports = class Api extends Module {
 
             // check if this path is a reference, if so completely ignore it, dont modify it at all!
             if (pathConfig instanceof mongoose.Schema.Types.ObjectId || (pathConfig instanceof mongoose.Schema.Types.Array && pathConfig.caster instanceof mongoose.Schema.Types.ObjectId)) {
-                finalData[path] = tempDoc.get(path); // get it from the original data, this is required since the model will just return the id
+                finalData[path] = Tools.getObjectValueByPath(data, path); // get it from the original data, this is required since the model will just return the id
                 continue;
             }
 
