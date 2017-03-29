@@ -327,7 +327,6 @@ module.exports = class Api extends Module {
                                 }).then(() => {
                                     doc.set(path, itemDoc._id);
                                 }, (err) => {
-                                    console.log(err);
                                     let formatted = Tools.formatMongooseError(err);
                                     let childFormatted = {};
 
@@ -607,6 +606,11 @@ module.exports = class Api extends Module {
             }
 
             finalData[path] = tempDoc.get(path);
+        }
+
+        // this is important, otherwise _id will be null so things will be reeeeeaaaaally weird
+        if(!finalData._id) {
+            delete finalData._id;
         }
 
         return finalData;
