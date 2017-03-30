@@ -546,6 +546,12 @@ module.exports = class Api extends Module {
      * @returns {{}}
      */
     cleanupDataForSave(data, model, user, maintainSubDocs) {
+
+        if(!data) {
+            return null;
+        }
+
+
         // remove __v by default, you cant update it anyways, do it here so we dont get any warnings
         delete data.__v;
         // save means new version, so in case any version was submitted, just reset it
