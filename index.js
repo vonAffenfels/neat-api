@@ -327,7 +327,7 @@ module.exports = class Api extends Module {
                                 }).then(() => {
                                     doc.set(path, itemDoc._id);
                                 }, (err) => {
-                                    let formatted = Tools.formatMongooseError(err);
+                                    let formatted = Tools.formatMongooseError(err, this.config.autoTranslateErrors ? req.__ : null);
                                     let childFormatted = {};
 
                                     for (let key in formatted) {
@@ -547,7 +547,7 @@ module.exports = class Api extends Module {
      */
     cleanupDataForSave(data, model, user, maintainSubDocs) {
 
-        if(!data) {
+        if (!data) {
             return null;
         }
 
@@ -615,7 +615,7 @@ module.exports = class Api extends Module {
         }
 
         // this is important, otherwise _id will be null so things will be reeeeeaaaaally weird
-        if(!finalData._id) {
+        if (!finalData._id) {
             delete finalData._id;
         }
 
