@@ -386,7 +386,13 @@ module.exports = class Api extends Module {
                     }
                 }
 
-                model.remove(query).then(() => {
+                model.find(query).then((docs) => {
+                    return Promise.map(docs, (doc) => {
+                        return doc.remove();
+                    });
+                }, (err) => {
+                    res.err(err);
+                }).then(() => {
                     res.end();
                 }, (err) => {
                     res.err(err);
