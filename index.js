@@ -386,6 +386,10 @@ module.exports = class Api extends Module {
                     }
                 }
 
+                if (Object.keys(query).length === 0) {
+                    return res.status(401).end("Empty query is not allowed");
+                }
+
                 model.find(query).then((docs) => {
                     return Promise.map(docs, (doc) => {
                         return doc.remove();
