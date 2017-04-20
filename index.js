@@ -435,12 +435,17 @@ module.exports = class Api extends Module {
 
                 let preAggregateQuery = query;
                 let aggregateProject = {};
+                let sortDir = req.body.sortDir || 1;
+                let purgeEmpty = req.body.purgeEmpty || true;
 
                 preAggregateQuery[field] = {
                     $exists: true
                 };
 
                 aggregateProject._id = "$" + field;
+                aggregateProject.sortKey = {
+                    $toLower: "$" + field
+                };
 
                 return model.aggregate([
                     {
@@ -451,11 +456,25 @@ module.exports = class Api extends Module {
                     },
                     {
                         $group: {
-                            _id: "$_id"
+                            _id: "$_id",
+                            sortKey: {
+                                $first: "$sortKey"
+                            }
+                        }
+                    },
+                    {
+                        $sort: {
+                            sortKey: sortDir
                         }
                     }
                 ]).then((results) => {
-                    res.json(results.map(v => v._id));
+                    let _ids = results.map(v => v._id);
+
+                    if (purgeEmpty) {
+                        _ids = _ids.filter(v => !!v);
+                    }
+
+                    res.json(_ids);
                 }, (err) => {
                     res.err(err);
                 });
