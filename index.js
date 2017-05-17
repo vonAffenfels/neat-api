@@ -1,14 +1,14 @@
 "use strict";
 
-var Application = require("neat-base").Application;
-var Module = require("neat-base").Module;
-var Tools = require("neat-base").Tools;
-var redis = require("redis");
-var apeStatus = require('ape-status');
-var Promise = require("bluebird");
-var crypto = require('crypto');
-var fs = require('fs');
-var pathToRegexp = require('path-to-regexp');
+const Application = require("neat-base").Application;
+const Module = require("neat-base").Module;
+const Tools = require("neat-base").Tools;
+const redis = require("redis");
+const apeStatus = require('ape-status');
+const Promise = require("bluebird");
+const crypto = require('crypto');
+const fs = require('fs');
+const pathToRegexp = require('path-to-regexp');
 
 module.exports = class Api extends Module {
 
@@ -141,6 +141,20 @@ module.exports = class Api extends Module {
                     });
                 }, (err) => {
                     res.err(err);
+                });
+                break;
+            case "unpublished":
+                if (!req.body._ids || !req.body._ids instanceof Array) {
+                    return res.json([]);
+                }
+
+                model.find({}).lean(true).select({_id: 1}).then((docs) => {
+                    let existing = docs.map((v) => v._id + "");
+                    let deleted = req.body._ids.filter(function (id) {
+                        return existing.indexOf(id) === -1;
+                    });
+
+                    res.json(deleted);
                 });
                 break;
             case "count":
