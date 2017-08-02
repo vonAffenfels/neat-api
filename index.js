@@ -57,22 +57,6 @@ module.exports = class Api extends Module {
         try {
             userModel = Application.modules[this.config.dbModuleName].getModel("user");
         } catch (e) {
-            res.status(400);
-            return res.err("model " + req.params.model + " does not exist");
-        }
-
-        if (userModel && req.user) {
-            userModel.update({
-                _id: req.user._id
-            }, {
-                $set: {
-                    lastActivity: new Date()
-                }
-            }).then(() => {
-                this.log.debug("User Activity updated");
-            }, () => {
-                this.log.debug("User Activity update failed");
-            });
         }
 
         let mongoose = Application.modules[this.config.dbModuleName].mongoose;
@@ -200,6 +184,20 @@ module.exports = class Api extends Module {
                     }
                 }
 
+                if (userModel && req.user) {
+                    userModel.update({
+                        _id: req.user._id
+                    }, {
+                        $set: {
+                            lastActivity: new Date()
+                        }
+                    }).then(() => {
+                        this.log.debug("User Activity updated");
+                    }, () => {
+                        this.log.debug("User Activity update failed");
+                    });
+                }
+
                 data = this.cleanupDataForSave(data, model, req.user);
 
                 if (!data) {
@@ -253,6 +251,20 @@ module.exports = class Api extends Module {
                         if (!Application.modules[this.config.authModuleName].hasPermission(req, req.params.model, req.params.action, doc)) {
                             return res.status(401).end();
                         }
+                    }
+
+                    if (userModel && req.user) {
+                        userModel.update({
+                            _id: req.user._id
+                        }, {
+                            $set: {
+                                lastActivity: new Date()
+                            }
+                        }).then(() => {
+                            this.log.debug("User Activity updated");
+                        }, () => {
+                            this.log.debug("User Activity update failed");
+                        });
                     }
 
                     if (req.body.saveReferences) {
@@ -425,6 +437,20 @@ module.exports = class Api extends Module {
 
                 if (Object.keys(query).length === 0) {
                     return res.status(401).end("Empty query is not allowed");
+                }
+
+                if (userModel && req.user) {
+                    userModel.update({
+                        _id: req.user._id
+                    }, {
+                        $set: {
+                            lastActivity: new Date()
+                        }
+                    }).then(() => {
+                        this.log.debug("User Activity updated");
+                    }, () => {
+                        this.log.debug("User Activity update failed");
+                    });
                 }
 
                 model.find(query).then((docs) => {
