@@ -45,11 +45,34 @@ module.exports = class Api extends Module {
 
     handleRequest(req, res) {
 
+        let model, userModel;
+
         try {
-            var model = Application.modules[this.config.dbModuleName].getModel(req.params.model);
+            model = Application.modules[this.config.dbModuleName].getModel(req.params.model);
         } catch (e) {
             res.status(400);
             return res.err("model " + req.params.model + " does not exist");
+        }
+
+        try {
+            userModel = Application.modules[this.config.dbModuleName].getModel("user");
+        } catch (e) {
+            res.status(400);
+            return res.err("model " + req.params.model + " does not exist");
+        }
+
+        if (userModel && req.user) {
+            userModel.update({
+                _id: req.user._id
+            }, {
+                $set: {
+                    lastActivity: new Date()
+                }
+            }).then(() => {
+                this.log.debug("User Activity updated");
+            }, () => {
+                this.log.debug("User Activity update failed");
+            });
         }
 
         let mongoose = Application.modules[this.config.dbModuleName].mongoose;
