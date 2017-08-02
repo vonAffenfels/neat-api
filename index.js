@@ -388,7 +388,7 @@ module.exports = class Api extends Module {
                             }, (err) => {
                                 res.err(err);
                             }).then((newDoc) => {
-                                res.json(newDoc);
+                                res.json(newDoc.toObject({virtuals: true, getters: true}));
                             }, (err) => {
                                 res.err(err);
                             });
@@ -408,7 +408,7 @@ module.exports = class Api extends Module {
                         }, (err) => {
                             res.err(err);
                         }).then((newDoc) => {
-                            res.json(newDoc);
+                            res.json(newDoc.toObject({virtuals: true, getters: true}));
                         }, (err) => {
                             res.err(err);
                         });
