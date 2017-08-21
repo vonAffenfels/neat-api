@@ -128,7 +128,6 @@
                 form: {
                     url: rootUrl + "/form-api/:form/:_id",
                     method: "GET",
-                    isArray: true,
                     params: {
                         form: "@form",
                         _id: "@_id"
@@ -137,7 +136,6 @@
                 formSubmit: {
                     url: rootUrl + "/form-api/:form",
                     method: "POST",
-                    isArray: true,
                     params: {
                         form: "@form"
                     }
