@@ -52,6 +52,9 @@
 
 	    neatFormModule.service("neatApi", ["$resource", "$location", function ($resource, $location) {
 	        var rootUrl = "//" + $location.host() + ":" + $location.port();
+	        if (window.NEAT_API_ROOT_URL) {
+	            rootUrl = window.NEAT_API_ROOT_URL;
+	        }
 
 	        return $resource(rootUrl, {}, {
 	            // AUTH

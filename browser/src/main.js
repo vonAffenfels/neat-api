@@ -9,6 +9,9 @@
         "$location",
         function ($resource, $location) {
             let rootUrl = "//" + $location.host() + ":" + $location.port();
+            if (window.NEAT_API_ROOT_URL) {
+                rootUrl = window.NEAT_API_ROOT_URL;
+            }
 
             return $resource(rootUrl, {}, {
                 // AUTH
