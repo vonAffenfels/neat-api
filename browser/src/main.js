@@ -2,7 +2,11 @@
 
 (function (window, ng) {
 
-    const neatFormModule = ng.module("neat-api", []);
+    let ngResource = require('angular-resource');
+
+    const neatFormModule = ng.module("neat-api", [
+        "ngResource"
+    ]);
 
     neatFormModule.service("neatApi", [
         "$resource",
