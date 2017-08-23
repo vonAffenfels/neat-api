@@ -570,6 +570,8 @@ module.exports = class Api extends Module {
         let from = req.params.from;
         let to = req.params.to;
         let publishedModel = Application.modules[this.config.dbModuleName].getModel("published");
+        let limit = req.query.limit;
+        let page = req.query.page;
 
         if (from) {
             from = new Date(from);
@@ -603,6 +605,21 @@ module.exports = class Api extends Module {
 
         if (query.$and.length === 0) {
             delete query.$and;
+        }
+
+        if (page !== undefined) {
+            page = parseInt(page) || 0;
+            limit = parseInt(limit) || 100;
+            return publishedModel
+                .find(query)
+                .lean(true)
+                .skip(page * limit)
+                .limit(limit)
+                .exec().then((data) => {
+                    res.json(data);
+                }, (err) => {
+                    res.status(500).end(err);
+                })
         }
 
         let lastData = null;
