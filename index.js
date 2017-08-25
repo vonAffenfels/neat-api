@@ -880,6 +880,17 @@ module.exports = class Api extends Module {
 
                     let pageItemModel = Application.modules[this.config.dbModuleName].getModel(page.model.name);
 
+                    if (pageItemModel.schema.paths._id && pageItemModel.schema.paths._id.instance === "ObjectID") {
+                        try {
+                            Application.modules[this.config.dbModuleName].mongoose.Types.ObjectId(req.params._id);
+                        } catch (e) {
+                            // invalid id => 404
+                            return resolve({
+                                status: 404
+                            });
+                        }
+                    }
+
                     let query = pageItemModel.findOne({
                         _id: req.params._id
                     }).populate(page.model.populate || []);
