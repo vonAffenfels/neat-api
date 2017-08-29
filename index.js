@@ -831,18 +831,14 @@ module.exports = class Api extends Module {
                 return page;
             }
         }
-
-        return this.pages[404];
     }
 
-    getPageJson(req) {
+    getPageJson(req, page) {
         return new Promise((resolve, reject) => {
-            let page = this.getPageFromRequest(req);
+            page = page || this.getPageFromRequest(req);
 
             if (!page) {
-                return resolve({
-                    status: 404
-                });
+                return this.getPageJson(req, this.pages[404]).then(resolve, reject);
             }
 
             req.activePage = page;
@@ -885,9 +881,7 @@ module.exports = class Api extends Module {
                             Application.modules[this.config.dbModuleName].mongoose.Types.ObjectId(req.params._id);
                         } catch (e) {
                             // invalid id => 404
-                            return resolve({
-                                status: 404
-                            });
+                            return this.getPageJson(req, this.pages[404]).then(resolve, reject);
                         }
                     }
 
@@ -903,9 +897,7 @@ module.exports = class Api extends Module {
 
                         if (!doc) {
                             this.log.debug("No Document found in model " + page.model.name + " for id " + req.params._id)
-                            return resolve({
-                                status: 404
-                            });
+                            return this.getPageJson(req, this.pages[404]).then(resolve, reject);
                         }
 
                         req.activePageItem = doc;
