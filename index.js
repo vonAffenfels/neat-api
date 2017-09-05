@@ -418,7 +418,7 @@ module.exports = class Api extends Module {
                                 _id: doc._id
                             }).read("primary").populate(populate)
                         }, (err) => {
-                            res.err(err);
+                            throw err;
                         }).then((newDoc) => {
                             res.json(newDoc.toObject({virtuals: true, getters: true}));
                         }, (err) => {
