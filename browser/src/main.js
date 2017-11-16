@@ -146,6 +146,13 @@
                     params: {
                         form: "@form"
                     }
+                },
+                formValidate: {
+                    url: rootUrl + "/form-api/:form/validate",
+                    method: "POST",
+                    params: {
+                        form: "@form"
+                    }
                 }
             });
         }
