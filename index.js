@@ -474,6 +474,8 @@ module.exports = class Api extends Module {
 
                 model.count(req.body.query || {}).then((count) => {
                     res.json(Tools.getPaginationForCount(count, req.body.limit || 15, req.body.page, req.body.pagesInView, req));
+                }, (err) => {
+                    res.err(err);
                 });
                 break;
             case "schema":
