@@ -216,6 +216,7 @@ module.exports = class Api extends Module {
                 break;
             case "save":
                 let getPromise = Promise.resolve();
+                let saveChildDocs = [];
                 let isUpdate = false;
 
                 data = this.cleanupDataForSave(data, model, req.user, true);
@@ -308,7 +309,7 @@ module.exports = class Api extends Module {
 
                                         if (!tempItemDoc) {
                                             delete subdata._id;
-                                            itemDoc = new relatedModel(subdata);
+                                            tempItemDoc = new relatedModel(subdata);
                                         }
 
                                         itemDoc = tempItemDoc;
@@ -321,7 +322,13 @@ module.exports = class Api extends Module {
                                             itemDoc.set(field, subdata[field]);
                                         }
 
-                                        return itemDoc.save();
+                                        let err = itemDoc.validateSync();
+
+                                        if(err) {
+                                            return Promise.reject(err);
+                                        }
+
+                                        return Promise.resolve();
                                     }).then(() => {
                                         return itemDoc;
                                     }, (err) => {
@@ -339,6 +346,7 @@ module.exports = class Api extends Module {
                                     });
                                 }).then((docs) => {
                                     doc.set(path, docs);
+                                    saveChildDocs.concat(docs);
                                 });
                             } else if (pathConfig instanceof mongoose.Schema.Types.ObjectId) {
                                 // path is a single reference
@@ -372,9 +380,18 @@ module.exports = class Api extends Module {
                                         itemDoc.set(field, subdata[field]);
                                     }
 
-                                    return itemDoc.save();
+                                    // don't save yet! - prevents saving of child docs when parent doc throws an save error
+                                    let err = itemDoc.validateSync();
+
+                                    if(err) {
+                                        return Promise.reject(err);
+                                    }
+
+                                    return Promise.resolve();
+
                                 }).then(() => {
                                     doc.set(path, itemDoc._id);
+                                    saveChildDocs.push(itemDoc);
                                 }, (err) => {
                                     let formatted = Tools.formatMongooseError(err, this.config.autoTranslateErrors ? req.__ : null);
                                     let childFormatted = {};
@@ -393,17 +410,34 @@ module.exports = class Api extends Module {
                                 return;
                             }
                         }).then(() => {
-                            return doc.save().then(() => {
-                                return model.findOne({
-                                    _id: doc._id
-                                }).read("primary").populate(populate)
-                            }, (err) => {
-                                res.err(err);
-                            }).then((newDoc) => {
-                                res.json(newDoc.toObject({virtuals: true, getters: true}));
-                            }, (err) => {
+
+                            let saveChildDocsPromise = Promise.resolve();
+                            let err = doc.validateSync();
+
+                            if(err) {
+                                return res.err(err);
+                            }
+
+                            if(saveChildDocs.length) {
+                                saveChildDocsPromise = Promise.map(saveChildDocs, (childDoc) => {
+                                    return childDoc.save();
+                                });
+                            }
+
+                            return saveChildDocsPromise.then(() => {
+                                return doc.save().then(() => {
+                                    return model.findOne({
+                                        _id: doc._id
+                                    }).read("primary").populate(populate)
+                                }).then((newDoc) => {
+                                    res.json(newDoc.toObject({virtuals: true, getters: true}));
+                                }).catch((err) => {
+                                    res.err(err);
+                                });
+                            }).catch((err) => {
                                 res.err(err);
                             });
+
                         }, (err) => {
                             if (err.formatted) {
                                 res.status(400);
