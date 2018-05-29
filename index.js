@@ -571,7 +571,22 @@ module.exports = class Api extends Module {
         let projection = req.params.projection;
         let from = req.params.from;
         let to = req.params.to;
-        let publishedModel = Application.modules[this.config.dbModuleName].getModel("published");
+        let hasPublish = Application.modules[this.config.projectionModuleName].config.publish[req.params.model];
+        let publishedModel;
+        let query;
+
+        if (hasPublish) {
+            publishedModel = Application.modules[this.config.dbModuleName].getModel("published");
+            query = {
+                model: req.params.model,
+                projection: projection,
+                $and: []
+            };
+        } else {
+            publishedModel = Application.modules[this.config.dbModuleName].getModel(req.params.model);
+            query = {};
+        }
+
         let limit = req.query.limit;
         let page = req.query.page;
 
@@ -582,12 +597,6 @@ module.exports = class Api extends Module {
         if (to) {
             to = new Date(to);
         }
-
-        let query = {
-            model: req.params.model,
-            projection: projection,
-            $and: []
-        };
 
         if (from) {
             query.$and.push({
@@ -605,47 +614,62 @@ module.exports = class Api extends Module {
             });
         }
 
-        if (query.$and.length === 0) {
+        if (query.$and && query.$and.length === 0) {
             delete query.$and;
         }
 
-        if (page !== undefined) {
+        if (hasPublish) {
+            if (page !== undefined) {
+                page = parseInt(page) || 0;
+                limit = parseInt(limit) || 100;
+                return publishedModel
+                    .find(query)
+                    .lean(true)
+                    .skip(page * limit)
+                    .limit(limit)
+                    .exec().then((data) => {
+                        res.json(data);
+                    }, (err) => {
+                        res.status(500).end(err);
+                    })
+            }
+
+            let lastData = null;
+
+            if (type === "json") {
+                res.header("Content-Type", "application/json;charset=UTF-8");
+            }
+
+            res.write("[");
+            publishedModel
+                .find(query)
+                .lean(true)
+                .cursor()
+                .on('data', function (data) {
+                    if (lastData) {
+                        res.write(",");
+                    }
+                    lastData = true;
+                    res.write(JSON.stringify(data.data));
+                })
+                .on('end', function () {
+                    res.write("]");
+                    res.end();
+                });
+        } else {
             page = parseInt(page) || 0;
             limit = parseInt(limit) || 100;
             return publishedModel
                 .find(query)
-                .lean(true)
+                .projection(req.params.projection)
                 .skip(page * limit)
                 .limit(limit)
                 .exec().then((data) => {
                     res.json(data);
                 }, (err) => {
                     res.status(500).end(err);
-                })
+                });
         }
-
-        let lastData = null;
-
-        if (type === "json") {
-            res.header("Content-Type", "application/json;charset=UTF-8");
-        }
-
-        res.write("[");
-        publishedModel
-            .find(query)
-            .lean(true)
-            .cursor()
-            .on('data', function (data) {
-                if (lastData) {
-                    res.write(",");
-                }
-                lastData = true;
-                res.write(JSON.stringify(data.data));
-            })
-            .on('end', function () {
-                res.write("]");
-                res.end();
-            });
     }
 
 
