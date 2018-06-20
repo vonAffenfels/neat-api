@@ -346,7 +346,7 @@ module.exports = class Api extends Module {
                                     });
                                 }).then((docs) => {
                                     doc.set(path, docs);
-                                    saveChildDocs.concat(docs);
+                                    saveChildDocs = saveChildDocs.concat(docs);
                                 });
                             } else if (pathConfig instanceof mongoose.Schema.Types.ObjectId) {
                                 // path is a single reference
