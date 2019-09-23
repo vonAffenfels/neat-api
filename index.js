@@ -605,7 +605,7 @@ module.exports = class Api extends Module {
         let projection = req.params.projection;
         let from = req.params.from;
         let to = req.params.to;
-        let count = req.params.count;
+        let count = req.query.count;
         let hasPublish = Application.modules[this.config.projectionModuleName].config.publish[req.params.model];
         let publishedModel;
         let query;
