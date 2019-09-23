@@ -20,8 +20,8 @@ module.exports = class Api extends Module {
             projectionModuleName: "projection",
             cacheModuleName: "cache",
             dbModuleName: "database",
-            authModuleName: "auth"
-        }
+            authModuleName: "auth",
+        };
     }
 
     init() {
@@ -85,9 +85,9 @@ module.exports = class Api extends Module {
                 // if the request didn't ask for a projection allow this only if the user has either complete access to the model or the specific action permission
                 if (!projection) {
                     if ((!req.user || !req.user.hasPermission([
-                            req.params.model,
-                            req.params.model + "." + req.params.action
-                        ])) && !isFilteringForOwnData) {
+                        req.params.model,
+                        req.params.model + "." + req.params.action,
+                    ])) && !isFilteringForOwnData) {
                         return res.status(401).end("No projection given or no permission to use this projection. Or the projection is missing in the config...");
                     }
                 } else if (projection && Application.modules[this.config.projectionModuleName]) {
@@ -186,11 +186,11 @@ module.exports = class Api extends Module {
 
                 if (userModel && req.user) {
                     userModel.update({
-                        _id: req.user._id
+                        _id: req.user._id,
                     }, {
                         $set: {
-                            lastActivity: new Date()
-                        }
+                            lastActivity: new Date(),
+                        },
                     }).then(() => {
                         this.log.debug("User Activity updated");
                     }, () => {
@@ -205,9 +205,9 @@ module.exports = class Api extends Module {
                 }
 
                 model.update(query, {
-                    $set: data
+                    $set: data,
                 }, {
-                    multi: true
+                    multi: true,
                 }).then(() => {
                     res.json({});
                 }, (err) => {
@@ -227,7 +227,7 @@ module.exports = class Api extends Module {
 
                 if (data._id) {
                     getPromise = model.findOne({
-                        _id: data._id
+                        _id: data._id,
                     });
                 }
 
@@ -256,11 +256,11 @@ module.exports = class Api extends Module {
 
                     if (userModel && req.user) {
                         userModel.update({
-                            _id: req.user._id
+                            _id: req.user._id,
                         }, {
                             $set: {
-                                lastActivity: new Date()
-                            }
+                                lastActivity: new Date(),
+                            },
                         }).then(() => {
                             this.log.debug("User Activity updated");
                         }, () => {
@@ -301,7 +301,7 @@ module.exports = class Api extends Module {
 
                                     if (subdata._id) {
                                         itemPromise = relatedModel.findOne({
-                                            _id: subdata._id
+                                            _id: subdata._id,
                                         });
                                     }
 
@@ -324,7 +324,7 @@ module.exports = class Api extends Module {
 
                                         let err = itemDoc.validateSync();
 
-                                        if(err) {
+                                        if (err) {
                                             return Promise.reject(err);
                                         }
 
@@ -359,8 +359,8 @@ module.exports = class Api extends Module {
 
                                 if (subdata._id) {
                                     itemPromise = relatedModel.findOne({
-                                        _id: subdata._id
-                                    })
+                                        _id: subdata._id,
+                                    });
                                 }
 
                                 return itemPromise.then((tempItemDoc) => {
@@ -383,7 +383,7 @@ module.exports = class Api extends Module {
                                     // don't save yet! - prevents saving of child docs when parent doc throws an save error
                                     let err = itemDoc.validateSync();
 
-                                    if(err) {
+                                    if (err) {
                                         return Promise.reject(err);
                                     }
 
@@ -414,11 +414,11 @@ module.exports = class Api extends Module {
                             let saveChildDocsPromise = Promise.resolve();
                             let err = doc.validateSync();
 
-                            if(err) {
+                            if (err) {
                                 return res.err(err);
                             }
 
-                            if(saveChildDocs.length) {
+                            if (saveChildDocs.length) {
                                 saveChildDocsPromise = Promise.map(saveChildDocs, (childDoc) => {
                                     return childDoc.save();
                                 });
@@ -427,8 +427,8 @@ module.exports = class Api extends Module {
                             return saveChildDocsPromise.then(() => {
                                 return doc.save().then(() => {
                                     return model.findOne({
-                                        _id: doc._id
-                                    }).read("primary").populate(populate)
+                                        _id: doc._id,
+                                    }).read("primary").populate(populate);
                                 }).then((newDoc) => {
                                     res.json(newDoc.toObject({virtuals: true, getters: true}));
                                 }).catch((err) => {
@@ -449,8 +449,8 @@ module.exports = class Api extends Module {
                     } else {
                         return doc.save().then(() => {
                             return model.findOne({
-                                _id: doc._id
-                            }).read("primary").populate(populate)
+                                _id: doc._id,
+                            }).read("primary").populate(populate);
                         }, (err) => {
                             throw err;
                         }).then((newDoc) => {
@@ -475,11 +475,11 @@ module.exports = class Api extends Module {
 
                 if (userModel && req.user) {
                     userModel.update({
-                        _id: req.user._id
+                        _id: req.user._id,
                     }, {
                         $set: {
-                            lastActivity: new Date()
-                        }
+                            lastActivity: new Date(),
+                        },
                     }).then(() => {
                         this.log.debug("User Activity updated");
                     }, () => {
@@ -538,34 +538,34 @@ module.exports = class Api extends Module {
                 let purgeEmpty = req.body.purgeEmpty || true;
 
                 preAggregateQuery[field] = {
-                    $exists: true
+                    $exists: true,
                 };
 
                 aggregateProject._id = "$" + field;
                 aggregateProject.sortKey = {
-                    $toLower: "$" + field
+                    $toLower: "$" + field,
                 };
 
                 return model.aggregate([
                     {
-                        $match: preAggregateQuery
+                        $match: preAggregateQuery,
                     },
                     {
-                        $project: aggregateProject
+                        $project: aggregateProject,
                     },
                     {
                         $group: {
                             _id: "$_id",
                             sortKey: {
-                                $first: "$sortKey"
-                            }
-                        }
+                                $first: "$sortKey",
+                            },
+                        },
                     },
                     {
                         $sort: {
-                            sortKey: sortDir
-                        }
-                    }
+                            sortKey: sortDir,
+                        },
+                    },
                 ]).then((results) => {
                     let _ids = results.map(v => v._id);
 
@@ -605,6 +605,7 @@ module.exports = class Api extends Module {
         let projection = req.params.projection;
         let from = req.params.from;
         let to = req.params.to;
+        let count = req.params.count;
         let hasPublish = Application.modules[this.config.projectionModuleName].config.publish[req.params.model];
         let publishedModel;
         let query;
@@ -614,7 +615,7 @@ module.exports = class Api extends Module {
             query = {
                 model: req.params.model,
                 projection: projection,
-                $and: []
+                $and: [],
             };
         } else {
             publishedModel = Application.modules[this.config.dbModuleName].getModel(req.params.model);
@@ -635,16 +636,16 @@ module.exports = class Api extends Module {
         if (from) {
             query.$and.push({
                 _updatedAt: {
-                    $gte: from
-                }
+                    $gte: from,
+                },
             });
         }
 
         if (to) {
             query.$and.push({
                 _updatedAt: {
-                    $lte: to
-                }
+                    $lte: to,
+                },
             });
         }
 
@@ -653,6 +654,17 @@ module.exports = class Api extends Module {
         }
 
         if (hasPublish) {
+            if (count) {
+                return publishedModel
+                    .count(query).then((count) => {
+                        res.json({
+                            total: count,
+                        });
+                    }, (err) => {
+                        res.status(500).end(err);
+                    });
+            }
+
             if (page !== undefined) {
                 page = parseInt(page) || 0;
                 limit = parseInt(limit) || 100;
@@ -665,7 +677,7 @@ module.exports = class Api extends Module {
                         res.json(data);
                     }, (err) => {
                         res.status(500).end(err);
-                    })
+                    });
             }
 
             let lastData = null;
@@ -691,6 +703,18 @@ module.exports = class Api extends Module {
                     res.end();
                 });
         } else {
+            if (count) {
+                return publishedModel
+                    .count(query)
+                    .then((count) => {
+                        res.json({
+                            total: count,
+                        });
+                    }, (err) => {
+                        res.status(500).end(err);
+                    });
+            }
+
             page = parseInt(page) || 0;
             limit = parseInt(limit) || 100;
             return publishedModel
@@ -743,9 +767,9 @@ module.exports = class Api extends Module {
                     // no user ? no permission ! probably wont get past the check in api/save anyways...
                     forbiddenPaths.push(path);
                 } else if (!user.hasPermission([
-                        modelName,
-                        modelName + ".save"
-                    ])) {
+                    modelName,
+                    modelName + ".save",
+                ])) {
                     // no general or specific save permission
                     forbiddenPaths.push(path);
                 }
@@ -860,7 +884,7 @@ module.exports = class Api extends Module {
                     path: conf.path,
                     instance: conf.instance,
                     defaultValue: conf.defaultValue || conf.options.default || null,
-                    map: conf.options.map || null
+                    map: conf.options.map || null,
                 };
             }
 
@@ -910,7 +934,7 @@ module.exports = class Api extends Module {
                 if (!req.user) {
                     return resolve({
                         status: 302,
-                        redirect: this.config.loginPath + "?return=" + req.path
+                        redirect: this.config.loginPath + "?return=" + req.path,
                     });
                 }
 
@@ -924,7 +948,7 @@ module.exports = class Api extends Module {
                         if (req.user.permissions.indexOf(permission) == -1) {
                             return resolve({
                                 status: 302,
-                                redirect: this.config.loginPath + "?return=" + req.path
+                                redirect: this.config.loginPath + "?return=" + req.path,
                             });
                         }
                     }
@@ -949,7 +973,7 @@ module.exports = class Api extends Module {
                     }
 
                     let query = pageItemModel.findOne({
-                        _id: req.params._id
+                        _id: req.params._id,
                     }).populate(page.model.populate || []);
 
                     if (page.model.projection) {
@@ -959,7 +983,7 @@ module.exports = class Api extends Module {
                     return query.then((doc) => {
 
                         if (!doc) {
-                            this.log.debug("No Document found in model " + page.model.name + " for id " + req.params._id)
+                            this.log.debug("No Document found in model " + page.model.name + " for id " + req.params._id);
                             return this.getPageJson(req, this.pages[404]).then(resolve, reject);
                         }
 
@@ -991,17 +1015,17 @@ module.exports = class Api extends Module {
                         url: req.path,
                         status: status,
                         meta: req.meta,
-                        data: dispatchedSlots
+                        data: dispatchedSlots,
                     });
                 }, reject);
             }, (err) => {
                 this.log.error(err);
                 return resolve({
-                    status: 500
+                    status: 500,
                 });
-            })
+            });
 
         });
     }
 
-}
+};
