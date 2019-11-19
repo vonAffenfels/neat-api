@@ -957,6 +957,7 @@ module.exports = class Api extends Module {
 
             let status = page.status || 200;
             let pagePreparationPromise = Promise.resolve();
+            let stats = {};
 
             if (page.model) {
                 pagePreparationPromise = new Promise((pageItemResolve, reject) => {
@@ -1010,11 +1011,14 @@ module.exports = class Api extends Module {
                         }
                     }
 
+                    stats.cache = this.getCacheHeaderFromSlots(dispatchedSlots);
+
                     resolve({
                         layout: page.layout || "default",
                         url: req.path,
                         status: status,
                         meta: req.meta,
+                        stats,
                         data: dispatchedSlots,
                     });
                 }, reject);
@@ -1026,6 +1030,42 @@ module.exports = class Api extends Module {
             });
 
         });
+    }
+
+    getCacheHeaderFromSlots(slots) {
+        let cache = null;
+
+        for (let slotName in slots) {
+            for (let i = 0; i < slots[slotName].length; i++) {
+                let elementData = slots[slotName][i];
+
+                if (elementData.doesNotExist || elementData.esi) {
+                    continue;
+                }
+
+                let ttl = null;
+
+                if (elementData.cache === false && !elementData.esi) {
+                    return false;
+                } else {
+                    if (elementData.cache && elementData.cache.expires) {
+                        ttl = elementData.cache.expires;
+                    } else if (elementData.cache) {
+                        ttl = elementData.cache;
+                    } else {
+                        ttl = Application.modules[this.config.cacheModuleName].config.caches.elementDefault;
+                    }
+                }
+
+                if (cache === null) {
+                    cache = ttl;
+                } else if (ttl < cache) {
+                    cache = ttl;
+                }
+            }
+        }
+
+        return cache;
     }
 
 };
