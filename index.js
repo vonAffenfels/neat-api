@@ -945,10 +945,21 @@ module.exports = class Api extends Module {
 
                     for (let i = 0; i < page.requires.permissions.length; i++) {
                         let permission = page.requires.permissions[i];
-                        if (req.user.permissions.indexOf(permission) == -1) {
+                        if (req.user.permissions.indexOf(permission) === -1) {
+
+                            let redirect = this.config.loginPath + "?return=" + req.path;
+                            let redirectPermissions = page.requires.redirectPermissions || {};
+
+                            for (let [redirectPermission, link] of Object.entries(redirectPermissions)) {
+                                if (req.user.permissions.indexOf(redirectPermission) !== -1) {
+                                    redirect = link;
+                                    break;
+                                }
+                            }
+
                             return resolve({
                                 status: 302,
-                                redirect: this.config.loginPath + "?return=" + req.path,
+                                redirect: redirect,
                             });
                         }
                     }
