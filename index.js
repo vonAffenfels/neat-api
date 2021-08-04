@@ -879,7 +879,7 @@ module.exports = class Api extends Module {
                 }
 
                 cleanSchema[key] = {
-                    enumValues: conf.enumValues || conf.options.enum,
+                    enumValues: conf.enumValues || conf.options.enum || (conf.caster ? conf.caster.enumValues : null),
                     regExp: conf.regExp,
                     path: conf.path,
                     instance: conf.instance,
